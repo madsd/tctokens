@@ -42,15 +42,40 @@ TokenMetrics
 | extend InputCostUsd = (UncachedInputTokens / 1000000.0) * coalesce(InputPricePer1MUsd, 0.0)
 | extend CachedInputCostUsd = (CachedInputTokens / 1000000.0) * coalesce(CachedInputPricePer1MUsd, 0.0)
 | extend OutputCostUsd = (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0)
-| extend InputCostUsd = round(InputCostUsd, 2)
-| extend CachedInputCostUsd = round(CachedInputCostUsd, 2)
-| extend OutputCostUsd = round(OutputCostUsd, 2)
 | summarize
     CachedInputTokens = sum(CachedInputTokens),
     UncachedInputTokens = sum(UncachedInputTokens),
     OutputTokens = sum(CompletionTokens),
     TotalCostUsd = round(sum(InputCostUsd + CachedInputCostUsd + OutputCostUsd), 2)
   by Day
+| order by Day asc
+'@
+
+$dailyCostQuery = @'
+let ModelPricing = datatable(Model:string, InputPricePer1MUsd:real, CachedInputPricePer1MUsd:real, OutputPricePer1MUsd:real)
+[
+    "gpt-5.4", 2.50, 0.25, 15.00,
+    "gpt-5.4-mini", 0.75, 0.075, 4.50,
+    "gpt-5.4-nano", 0.20, 0.025, 1.25
+];
+let TokenMetrics = customMetrics
+| where timestamp > ago(30d)
+| where name in ("Prompt Tokens", "Completion Tokens", "Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens")
+| extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
+| where isnotempty(Model)
+| summarize
+    PromptTokens = sumif(value, name == "Prompt Tokens"),
+    CompletionTokens = sumif(value, name == "Completion Tokens"),
+    CachedInputTokens = sumif(value, name in ("Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens"))
+  by Day = startofday(timestamp), Model;
+TokenMetrics
+| join kind=leftouter ModelPricing on Model
+| extend UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, 0.0)
+| extend TotalCostUsd =
+    (UncachedInputTokens / 1000000.0) * coalesce(InputPricePer1MUsd, 0.0) +
+    (CachedInputTokens / 1000000.0) * coalesce(CachedInputPricePer1MUsd, 0.0) +
+    (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0)
+| summarize TotalCostUsd = round(sum(TotalCostUsd), 2) by Day
 | order by Day asc
 '@
 
@@ -150,7 +175,7 @@ $workbookModel = @{
             name = 'intro'
             content = @{
                 version = 'TextBlock/1.0'
-                text = "## Total Cost of Tokens`nThis dashboard shows token consumption and spend by month, user key, model, and reasoning effort, including model-router selected model tracking."
+                text = "## Total Cost of Tokens`nThis dashboard shows daily token consumption and spend by user key, model, and reasoning effort, including model-router selected model tracking."
             }
         },
         @{
@@ -162,18 +187,31 @@ $workbookModel = @{
                 queryType = 0
                 resourceType = 'microsoft.insights/components'
                 visualization = 'columnchart'
-                title = 'Daily Token and Spend Trend'
+                title = 'Daily Token Trend'
                 size = 0
                 chartSettings = @{
-                    seriesLabelSettings = @(
-                        @{ seriesName = 'TotalCostUsd'; yAxisSetting = 1 }
-                    )
+                    yAxis = @('CachedInputTokens', 'UncachedInputTokens', 'OutputTokens')
                     ySettings = @{
                         numberFormatSettings = @{ unit = 17; options = @{ style = 'decimal'; useGrouping = $true } }
                     }
-                    y2Settings = @{
+                }
+            }
+        },
+        @{
+            type = 3
+            name = 'daily-cost'
+            content = @{
+                version = 'KqlItem/1.0'
+                query = $dailyCostQuery
+                queryType = 0
+                resourceType = 'microsoft.insights/components'
+                visualization = 'timechart'
+                title = 'Daily Spend Trend (USD)'
+                size = 0
+                chartSettings = @{
+                    yAxis = @('TotalCostUsd')
+                    ySettings = @{
                         numberFormatSettings = @{ unit = 0; options = @{ style = 'decimal'; minimumFractionDigits = 2; maximumFractionDigits = 2 } }
-                        axisLabelOverride = 'Cost (USD)'
                     }
                 }
             }

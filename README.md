@@ -36,6 +36,7 @@ More tools coming.
 - `scripts/discover-model-versions.ps1` - resolves model versions and writes azd env vars
 - `scripts/list-user-subscription-keys.ps1` - exports generated APIM subscription keys
 - `scripts/deploy-dashboard-workbook.ps1` - creates/updates an Azure Workbook dashboard
+- `scripts/seed-fake-token-metrics.ps1` - sends synthetic token metrics to App Insights for dashboard demos
 - `dashboard/token-cost-queries.kql` - dashboard/reporting queries
 
 ## Prerequisites
@@ -115,11 +116,12 @@ Before using the workbook, in the Application Insights resource open **Usage and
    - `gpt-5.4-nano`
    Update these values if your contracted or regional rates differ.
 2. Run:
-   - Query 1: per key + per model
-   - Query 2: per key total across models
-   - Query 3: per model total across users
-   - Query 4: model-router selected model breakdown
-   - Query 5: total tokens by model and reasoning effort
+   - Query 1: daily token trend
+   - Query 2: daily spend trend (USD)
+   - Query 3: per key total across models
+   - Query 4: per model total across users
+   - Query 5: model-router selected model breakdown
+   - Query 6: total tokens by model and reasoning effort
 
 These queries compute total dollar spend per user key and per model.
 
@@ -130,8 +132,21 @@ These queries compute total dollar spend per user key and per model.
 ```
 
 This creates/updates a workbook named **Total Cost of Tokens Dashboard** with:
-- Month-over-month token/spend chart
+- Daily token trend chart
+- Daily spend trend chart
 - Per-user key/model spend table
 - Per-model spend chart
 - Total tokens by model and reasoning effort pie chart
 - Router selected-model distribution chart
+
+### Seed synthetic demo data
+
+Use this to populate metrics for `user01-subscription` and `user02-subscription` so the workbook shows realistic activity quickly:
+
+```powershell
+.\scripts\seed-fake-token-metrics.ps1 -ResourceGroupName rg-tctokens -AppInsightsName appi-tctokens-lpycq6 -Days 2
+```
+
+Notes:
+- Synthetic points are marked with `SyntheticData=true` in metric properties.
+- Application Insights metric ingestion accepts recent timestamps only (about last 48 hours).

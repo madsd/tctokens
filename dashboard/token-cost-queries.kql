@@ -1,4 +1,4 @@
-// Query 1: Daily token and spend trend (last 30 days)
+// Query 1: Daily token trend (last 30 days)
 // Update this pricing table with your negotiated prices in USD per 1M tokens.
 let ModelPricing = datatable(
     Model:string,
@@ -24,18 +24,48 @@ let TokenMetrics = customMetrics
 TokenMetrics
 | join kind=leftouter ModelPricing on Model
 | extend UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, 0.0)
-| extend InputCostUsd = (UncachedInputTokens / 1000000.0) * coalesce(InputPricePer1MUsd, 0.0)
-| extend CachedInputCostUsd = (CachedInputTokens / 1000000.0) * coalesce(CachedInputPricePer1MUsd, 0.0)
-| extend OutputCostUsd = (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0)
 | summarize
     CachedInputTokens = sum(CachedInputTokens),
     UncachedInputTokens = sum(UncachedInputTokens),
-    OutputTokens = sum(CompletionTokens),
-    TotalCostUsd = round(sum(InputCostUsd + CachedInputCostUsd + OutputCostUsd), 2)
+    OutputTokens = sum(CompletionTokens)
   by Day
 | order by Day asc
 
-// Query 2: Per user key + model token usage and cost (USD)
+// Query 2: Daily spend trend in USD (last 30 days)
+let ModelPricing = datatable(
+    Model:string,
+    InputPricePer1MUsd:real,
+    CachedInputPricePer1MUsd:real,
+    OutputPricePer1MUsd:real
+)
+[
+    "gpt-5.4", 2.50, 0.25, 15.00,
+    "gpt-5.4-mini", 0.75, 0.075, 4.50,
+    "gpt-5.4-nano", 0.20, 0.025, 1.25
+];
+
+let TokenMetrics = customMetrics
+| where timestamp > ago(30d)
+| where name in ("Prompt Tokens", "Completion Tokens", "Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens")
+| extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
+| where isnotempty(Model)
+| summarize
+    PromptTokens = sumif(value, name == "Prompt Tokens"),
+    CompletionTokens = sumif(value, name == "Completion Tokens"),
+    CachedInputTokens = sumif(value, name in ("Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens"))
+  by Day = startofday(timestamp), Model;
+
+TokenMetrics
+| join kind=leftouter ModelPricing on Model
+| extend UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, 0.0)
+| extend TotalCostUsd =
+    (UncachedInputTokens / 1000000.0) * coalesce(InputPricePer1MUsd, 0.0) +
+    (CachedInputTokens / 1000000.0) * coalesce(CachedInputPricePer1MUsd, 0.0) +
+    (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0)
+| summarize TotalCostUsd = round(sum(TotalCostUsd), 2) by Day
+| order by Day asc
+
+// Query 3: Per user key + model token usage and cost (USD)
 let ModelPricing = datatable(
     Model:string,
     InputPricePer1MUsd:real,
@@ -76,7 +106,7 @@ TokenMetrics
   by SubscriptionId, UserId
 | order by TotalCostUsd desc
 
-// Query 3: Per model totals across all users
+// Query 4: Per model totals across all users
 let ModelPricing = datatable(
     Model:string,
     InputPricePer1MUsd:real,
@@ -110,7 +140,7 @@ TokenMetrics
 | project Model, PromptTokens, CachedInputTokens, CompletionTokens, TotalCostUsd
 | order by TotalCostUsd desc
 
-// Query 4: Router selection breakdown (selected model when caller used deploymentId=router)
+// Query 5: Router selection breakdown (selected model when caller used deploymentId=router)
 customMetrics
 | where timestamp > ago(30d)
 | where name == "Total Tokens"
@@ -121,7 +151,7 @@ customMetrics
 | summarize TotalTokens = sum(value), Requests = count() by SelectedModel
 | order by TotalTokens desc
 
-// Query 5: Total tokens by model and reasoning effort
+// Query 6: Total tokens by model and reasoning effort
 customMetrics
 | where timestamp > ago(30d)
 | where name == "Total Tokens"
