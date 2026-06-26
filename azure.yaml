@@ -1,0 +1,6 @@
+name: tctokens-insights
+metadata:
+  template: tctokens-insights
+infra:
+  path: infra
+

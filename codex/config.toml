@@ -1,0 +1,81 @@
+notify = [ "C:\\Users\\madsd\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\1b23c930bdf84ed6\\bin\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe", "turn-ended" ]
+
+model_provider = "foundry-gateway"
+model = "gpt-5.4"
+model_reasoning_effort = "xhigh"
+model_catalog_json = "~/.codex/foundry-models.json"
+
+[marketplaces.openai-bundled]
+last_updated = "2026-06-25T11:02:22Z"
+source_type = "local"
+source = '\\?\C:\Users\madsd\.codex\.tmp\bundled-marketplaces\openai-bundled'
+
+[marketplaces.openai-primary-runtime]
+last_updated = "2026-06-25T11:11:26Z"
+source_type = "local"
+source = '\\?\C:\Users\madsd\.cache\codex-runtimes\codex-primary-runtime\plugins\openai-primary-runtime'
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."template-creator@openai-primary-runtime"]
+enabled = true
+
+
+[model_providers.foundry-gateway]
+name = "Foundry via AI Gateway"
+base_url = "https://apim-tctokens-lpycq6.azure-api.net/openai"
+wire_api = "responses"
+env_http_headers = { "Ocp-Apim-Subscription-Key" = "APIM_SUB_KEY" }
+
+[features]
+js_repl = false
+
+[mcp_servers.node_repl]
+args = []
+command = 'C:\Users\madsd\AppData\Local\OpenAI\Codex\runtimes\cua_node\1b23c930bdf84ed6\bin\node_repl.exe'
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = 'C:\Users\madsd\AppData\Local\OpenAI\Codex\runtimes\cua_node\1b23c930bdf84ed6\bin\node_modules'
+NODE_REPL_NODE_PATH = 'C:\Users\madsd\AppData\Local\OpenAI\Codex\runtimes\cua_node\1b23c930bdf84ed6\bin\node.exe'
+NODE_REPL_TRUSTED_CODE_PATHS = 'C:\Users\madsd\.codex'
+CODEX_HOME = 'C:\Users\madsd\.codex'
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "5504c0782b5c86b7dd08314045b9843e973a230e1be8f7e2e0ba3716fc63c55e,566be6ef352eb3de899adc56a9cd7b5e46c8f65b00e56b5630dd7a580e10cbea"
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
+NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
+BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
+BROWSER_USE_CODEX_APP_VERSION = "26.616.81150"
+SKY_CUA_NATIVE_PIPE = "1"
+SKY_CUA_NATIVE_PIPE_DIRECTORY = '\\.\pipe\codex-computer-use-c886b076-1f9b-4b57-8e52-84a5fe7d70de'
+CODEX_CLI_PATH = 'C:\Users\madsd\AppData\Local\OpenAI\Codex\bin\38dff8711e296435\codex.exe'
+
+[desktop]
+conversationDetailMode = "STEPS_COMMANDS"
+ambient-suggestions-enabled = false
+
+[projects.'c:\code\dev']
+trust_level = "trusted"
+
+[projects.'c:\code\dev\codextest']
+trust_level = "trusted"
+
+[tui.model_availability_nux]
+"gpt-5.5" = 4
+
+[windows]
+sandbox = "unelevated"

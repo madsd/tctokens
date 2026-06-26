@@ -1,0 +1,14 @@
+# azd environment state (contains subscription IDs, resource names, secrets)
+.azure/
+
+# Bicep compiled ARM output
+infra/*.json
+!infra/main.parameters.bicepparam
+
+# Temp workbook payloads
+workbook-payload-*.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
