@@ -53,7 +53,7 @@ TokenMetrics
     OutputTokens = sum(CompletionTokens),
     TotalCostUsd = round(sum(InputCostUsd + CachedInputCostUsd + OutputCostUsd), 2)
   by Day
-| extend DayLabel = format_datetime(Day, 'yyyy-MM-dd')
+| extend DayLabel = strcat('Day ', format_datetime(Day, 'yyyy-MM-dd'))
 | order by Day asc
 | project DayLabel, CachedInputTokens, UncachedInputTokens, OutputTokens
 '@
@@ -88,7 +88,7 @@ TokenMetrics
     (CachedInputTokens / 1000000.0) * coalesce(CachedInputPricePer1MUsd, 0.0) +
     (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0)
 | summarize TotalCostUsd = round(sum(TotalCostUsd), 2) by Day
-| extend DayLabel = format_datetime(Day, 'yyyy-MM-dd')
+| extend DayLabel = strcat('Day ', format_datetime(Day, 'yyyy-MM-dd'))
 | order by Day asc
 | project DayLabel, TotalCostUsd
 '@
