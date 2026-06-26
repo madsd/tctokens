@@ -18,6 +18,14 @@ This project provisions:
 - Log Analytics + App Insights plumbing for observability
 - KQL dashboard queries for per-key and per-model cost reporting
 
+## Client tool setup
+
+### Codex CLI
+
+See [codex/codex-cli-ai-gateway-setup.md](codex/codex-cli-ai-gateway-setup.md) for connecting Codex CLI to the gateway.
+
+More tools coming.
+
 ## Files
 
 - `azure.yaml` - azd configuration
