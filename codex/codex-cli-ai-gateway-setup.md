@@ -39,6 +39,8 @@ wire_api = "responses"
 env_http_headers = { "Ocp-Apim-Subscription-Key" = "APIM_SUB_KEY" }
 ```
 
+> **Note:** `model` and `model_reasoning_effort` serve as startup defaults only. Codex CLI overwrites them in `config.toml` whenever you switch model or reasoning effort at runtime, so their values here will drift over time.
+
 ## 4. Restart Codex CLI
 
 Close and reopen Codex CLI so it reloads the config and model catalog.
