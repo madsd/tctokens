@@ -37,6 +37,9 @@ param logAnalyticsName string = take('log-${toLower(environmentName)}-${substrin
 @description('Application Insights component name.')
 param appInsightsName string = take('appi-${toLower(environmentName)}-${substring(uniqueString(subscription().subscriptionId, environmentName), 0, 6)}', 260)
 
+@description('Azure Managed Grafana instance name.')
+param grafanaName string = take('graf-${toLower(environmentName)}-${substring(uniqueString(subscription().subscriptionId, environmentName), 0, 6)}', 63)
+
 @description('Foundry deployment names and model metadata.')
 param gpt54DeploymentName string = 'gpt-5.4'
 param gpt54ModelName string = 'gpt-5.4'
@@ -116,6 +119,7 @@ module workload './workload.bicep' = {
     apimName: apimName
     logAnalyticsName: logAnalyticsName
     appInsightsName: appInsightsName
+    grafanaName: grafanaName
     gpt54DeploymentName: gpt54DeploymentName
     gpt54ModelName: gpt54ModelName
     gpt54ModelVersion: gpt54ModelVersion
@@ -148,5 +152,7 @@ output apimServiceName string = workload.outputs.apimServiceName
 output apimGatewayUrl string = workload.outputs.apimGatewayUrl
 output appInsightsName string = workload.outputs.appInsightsName
 output logAnalyticsWorkspaceName string = workload.outputs.logAnalyticsWorkspaceName
+output grafanaName string = workload.outputs.grafanaName
+output grafanaEndpoint string = workload.outputs.grafanaEndpoint
 output userSubscriptionNames array = workload.outputs.userSubscriptionNames
 output foundryProjectId string = workload.outputs.foundryProjectId

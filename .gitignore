@@ -5,9 +5,6 @@
 infra/*.json
 !infra/main.parameters.bicepparam
 
-# Temp workbook payloads
-workbook-payload-*.json
-
 # OS / editor
 .DS_Store
 Thumbs.db

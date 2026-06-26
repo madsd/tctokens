@@ -1,0 +1,355 @@
+{
+  "uid": "token-cost-insights",
+  "title": "Total Cost of Tokens",
+  "description": "Per-user and per-model token and spend insights from APIM custom metrics.",
+  "schemaVersion": 39,
+  "tags": [
+    "tctokens",
+    "ai-gateway",
+    "cost"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "refresh": "",
+  "templating": {
+    "list": [
+      {
+        "name": "developerKey",
+        "label": "Developer / Key",
+        "type": "custom",
+        "query": "user01-subscription,user02-subscription,user03-subscription,user04-subscription,user05-subscription",
+        "includeAll": true,
+        "multi": false,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "hide": 0
+      },
+      {
+        "name": "modelFilter",
+        "label": "Model",
+        "type": "custom",
+        "query": "gpt-5.4,gpt-5.4-mini,gpt-5.4-nano",
+        "includeAll": true,
+        "multi": false,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "hide": 0
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Daily Token Trend",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "__AZMON_DS_UID__"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "__AZMON_DS_UID__"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "dashboardTime": true,
+            "resultFormat": "time_series",
+            "resources": [
+              "__LAW_RESOURCE_ID__"
+            ],
+            "query": "AppMetrics\n| where TimeGenerated > ago(45d)\n| where Name in (\"Prompt Tokens\", \"Completion Tokens\")\n| extend SubscriptionId = tostring(Properties[\"Subscription ID\"])\n| extend Model = coalesce(tostring(Properties[\"SelectedModel\"]), tostring(Properties[\"Model\"]))\n| extend SyntheticDay = tostring(Properties[\"SyntheticDay\"])\n| extend EffectiveTime = iff(isnotempty(SyntheticDay), todatetime(SyntheticDay), TimeGenerated)\n| where isnotempty(Model)\n| where $__contains(SubscriptionId, $developerKey)\n| where $__contains(Model, $modelFilter)\n| summarize TotalTokens = sum(Sum) by Day = startofday(EffectiveTime), Model\n| evaluate pivot(Model, sum(TotalTokens))\n| order by Day asc"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Daily Spend Trend (USD)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "__AZMON_DS_UID__"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "__AZMON_DS_UID__"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "dashboardTime": true,
+            "resultFormat": "time_series",
+            "resources": [
+              "__LAW_RESOURCE_ID__"
+            ],
+            "query": "let ModelPricing = datatable(Model:string, InputPricePer1MUsd:real, CachedInputPricePer1MUsd:real, OutputPricePer1MUsd:real)\n[\n    \"gpt-5.4\", 2.50, 0.25, 15.00,\n    \"gpt-5.4-mini\", 0.75, 0.075, 4.50,\n    \"gpt-5.4-nano\", 0.20, 0.025, 1.25\n];\nlet TokenMetrics = AppMetrics\n| where TimeGenerated > ago(45d)\n| where Name in (\"Prompt Tokens\", \"Completion Tokens\", \"Prompt Cached Tokens\", \"Cached Prompt Tokens\", \"Cached Tokens\")\n| extend SubscriptionId = tostring(Properties[\"Subscription ID\"])\n| extend Model = coalesce(tostring(Properties[\"SelectedModel\"]), tostring(Properties[\"Model\"]))\n| extend SyntheticDay = tostring(Properties[\"SyntheticDay\"])\n| extend EffectiveTime = iff(isnotempty(SyntheticDay), todatetime(SyntheticDay), TimeGenerated)\n| where isnotempty(Model)\n| where $__contains(SubscriptionId, $developerKey)\n| where $__contains(Model, $modelFilter)\n| summarize PromptTokens = sumif(Sum, Name == \"Prompt Tokens\"), CompletionTokens = sumif(Sum, Name == \"Completion Tokens\"), CachedInputTokens = sumif(Sum, Name in (\"Prompt Cached Tokens\", \"Cached Prompt Tokens\", \"Cached Tokens\")) by Day = startofday(EffectiveTime), Model;\nTokenMetrics\n| join kind=leftouter ModelPricing on Model\n| extend UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, 0.0)\n| summarize TotalCostUsd = round(sum((UncachedInputTokens / 1000000.0) * coalesce(InputPricePer1MUsd, 0.0) + (CachedInputTokens / 1000000.0) * coalesce(CachedInputPricePer1MUsd, 0.0) + (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0)), 4) by Day\n| order by Day asc"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Cost by Subscription Key, User, and Model",
+      "type": "table",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "__AZMON_DS_UID__"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "__AZMON_DS_UID__"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "dashboardTime": true,
+            "resultFormat": "table",
+            "resources": [
+              "__LAW_RESOURCE_ID__"
+            ],
+            "query": "let ModelPricing = datatable(Model:string, InputPricePer1MUsd:real, CachedInputPricePer1MUsd:real, OutputPricePer1MUsd:real)\n[\n    \"gpt-5.4\", 2.50, 0.25, 15.00,\n    \"gpt-5.4-mini\", 0.75, 0.075, 4.50,\n    \"gpt-5.4-nano\", 0.20, 0.025, 1.25\n];\nlet TokenMetrics = AppMetrics\n| where TimeGenerated > ago(45d)\n| where Name in (\"Prompt Tokens\", \"Completion Tokens\", \"Prompt Cached Tokens\", \"Cached Prompt Tokens\", \"Cached Tokens\")\n| extend SubscriptionId = tostring(Properties[\"Subscription ID\"])\n| extend UserId = tostring(Properties[\"User ID\"])\n| extend Model = coalesce(tostring(Properties[\"SelectedModel\"]), tostring(Properties[\"Model\"]))\n| where $__contains(SubscriptionId, $developerKey)\n| where $__contains(Model, $modelFilter)\n| where isnotempty(SubscriptionId) and isnotempty(Model)\n| summarize PromptTokens = sumif(Sum, Name == \"Prompt Tokens\"), CompletionTokens = sumif(Sum, Name == \"Completion Tokens\"), CachedInputTokens = sumif(Sum, Name in (\"Prompt Cached Tokens\", \"Cached Prompt Tokens\", \"Cached Tokens\")) by SubscriptionId, UserId, Model;\nTokenMetrics\n| join kind=leftouter ModelPricing on Model\n| extend UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, 0.0)\n| extend TotalCostUsd = round((UncachedInputTokens / 1000000.0) * coalesce(InputPricePer1MUsd, 0.0) + (CachedInputTokens / 1000000.0) * coalesce(CachedInputPricePer1MUsd, 0.0) + (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0), 4)\n| project SubscriptionId, UserId, Model, PromptTokens, CachedInputTokens, CompletionTokens, TotalCostUsd\n| order by TotalCostUsd desc"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      }
+    },
+    {
+      "id": 4,
+      "title": "Cost by Model",
+      "type": "barchart",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "__AZMON_DS_UID__"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "__AZMON_DS_UID__"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "dashboardTime": true,
+            "resultFormat": "table",
+            "resources": [
+              "__LAW_RESOURCE_ID__"
+            ],
+            "query": "let ModelPricing = datatable(Model:string, InputPricePer1MUsd:real, CachedInputPricePer1MUsd:real, OutputPricePer1MUsd:real)\n[\n    \"gpt-5.4\", 2.50, 0.25, 15.00,\n    \"gpt-5.4-mini\", 0.75, 0.075, 4.50,\n    \"gpt-5.4-nano\", 0.20, 0.025, 1.25\n];\nlet TokenMetrics = AppMetrics\n| where TimeGenerated > ago(45d)\n| where Name in (\"Prompt Tokens\", \"Completion Tokens\", \"Prompt Cached Tokens\", \"Cached Prompt Tokens\", \"Cached Tokens\")\n| extend SubscriptionId = tostring(Properties[\"Subscription ID\"])\n| extend Model = coalesce(tostring(Properties[\"SelectedModel\"]), tostring(Properties[\"Model\"]))\n| where $__contains(SubscriptionId, $developerKey)\n| where $__contains(Model, $modelFilter)\n| where isnotempty(Model)\n| summarize PromptTokens = sumif(Sum, Name == \"Prompt Tokens\"), CompletionTokens = sumif(Sum, Name == \"Completion Tokens\"), CachedInputTokens = sumif(Sum, Name in (\"Prompt Cached Tokens\", \"Cached Prompt Tokens\", \"Cached Tokens\")) by Model;\nTokenMetrics\n| join kind=leftouter ModelPricing on Model\n| extend UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, 0.0)\n| extend TotalCostUsd = round((UncachedInputTokens / 1000000.0) * coalesce(InputPricePer1MUsd, 0.0) + (CachedInputTokens / 1000000.0) * coalesce(CachedInputPricePer1MUsd, 0.0) + (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0), 4)\n| summarize TotalCostUsd = sum(TotalCostUsd) by Model\n| order by TotalCostUsd desc"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "xField": "Model",
+        "showValue": "always"
+      }
+    },
+    {
+      "id": 5,
+      "title": "Router Selected Model Distribution",
+      "type": "piechart",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "__AZMON_DS_UID__"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "__AZMON_DS_UID__"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "dashboardTime": true,
+            "resultFormat": "table",
+            "resources": [
+              "__LAW_RESOURCE_ID__"
+            ],
+            "query": "AppMetrics\n| where TimeGenerated > ago(45d)\n| where Name == \"Total Tokens\"\n| extend SubscriptionId = tostring(Properties[\"Subscription ID\"])\n| extend RequestedModel = tostring(Properties[\"RequestedModel\"])\n| extend SelectedModel = coalesce(tostring(Properties[\"SelectedModel\"]), tostring(Properties[\"Model\"]))\n| where $__contains(SubscriptionId, $developerKey)\n| where tolower(RequestedModel) == \"router\"\n| where isnotempty(SelectedModel)\n| summarize TotalTokens = sum(Sum) by SelectedModel\n| order by TotalTokens desc"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Total Tokens by Model and Reasoning Effort",
+      "type": "piechart",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "__AZMON_DS_UID__"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "__AZMON_DS_UID__"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "dashboardTime": true,
+            "resultFormat": "table",
+            "resources": [
+              "__LAW_RESOURCE_ID__"
+            ],
+            "query": "AppMetrics\n| where TimeGenerated > ago(45d)\n| where Name == \"Total Tokens\"\n| extend SubscriptionId = tostring(Properties[\"Subscription ID\"])\n| extend Model = coalesce(tostring(Properties[\"SelectedModel\"]), tostring(Properties[\"Model\"]))\n| extend ReasoningEffort = tostring(Properties[\"ReasoningEffort\"])\n| extend ReasoningEffort = iif(isempty(ReasoningEffort), \"unspecified\", tolower(ReasoningEffort))\n| where $__contains(SubscriptionId, $developerKey)\n| where $__contains(Model, $modelFilter)\n| where isnotempty(Model)\n| summarize TotalTokens = sum(Sum) by Slice = strcat(Model, \" | \", ReasoningEffort)\n| order by TotalTokens desc"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        }
+      }
+    }
+  ]
+}

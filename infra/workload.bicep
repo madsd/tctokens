@@ -30,6 +30,9 @@ param logAnalyticsName string
 @description('Application Insights component name.')
 param appInsightsName string
 
+@description('Azure Managed Grafana instance name.')
+param grafanaName string
+
 @description('Foundry deployment names and model metadata.')
 param gpt54DeploymentName string
 param gpt54ModelName string
@@ -191,6 +194,24 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   tags: tags
 }
 
+resource managedGrafana 'Microsoft.Dashboard/grafana@2023-09-01' = {
+  name: grafanaName
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    apiKey: 'Enabled'
+    deterministicOutboundIP: 'Disabled'
+    publicNetworkAccess: 'Enabled'
+    zoneRedundancy: 'Disabled'
+  }
+  tags: tags
+}
+
 resource apim 'Microsoft.ApiManagement/service@2023-09-01-preview' = {
   name: apimName
   location: location
@@ -218,6 +239,26 @@ resource apimToAiRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a97b65f3-24c7-4388-baec-2e87135dc908')
     principalId: apim.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource grafanaMonitoringReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(managedGrafana.id, logAnalytics.id, 'monitoring-reader')
+  scope: logAnalytics
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '43d0d8ad-25c7-4714-9337-8ba259a9fe05')
+    principalId: managedGrafana.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource grafanaLogAnalyticsReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(managedGrafana.id, logAnalytics.id, 'log-analytics-reader')
+  scope: logAnalytics
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '73c42c96-874c-492b-b04d-ab87d138a893')
+    principalId: managedGrafana.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -268,5 +309,7 @@ output apimServiceName string = apim.name
 output apimGatewayUrl string = apim.properties.gatewayUrl
 output appInsightsName string = appInsights.name
 output logAnalyticsWorkspaceName string = logAnalytics.name
+output grafanaName string = managedGrafana.name
+output grafanaEndpoint string = managedGrafana.properties.endpoint
 output userSubscriptionNames array = apimGateway.outputs.userSubscriptionNames
 output foundryProjectId string = aiProject.outputs.projectId

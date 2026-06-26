@@ -16,7 +16,7 @@ This project provisions:
   - pass-through model invocation via `model` in request body, with deterministic `router` fan-out across the three GPT 5.4 deployments
 - Five initial APIM users and dedicated subscriptions (keys)
 - Log Analytics + App Insights plumbing for observability
-- KQL dashboard queries for per-key and per-model cost reporting
+- Azure Managed Grafana dashboard for per-key and per-model cost reporting
 
 ## Client tool setup
 
@@ -35,9 +35,10 @@ More tools coming.
 - `infra/main.parameters.bicepparam` - environment-driven inputs
 - `scripts/discover-model-versions.ps1` - resolves model versions and writes azd env vars
 - `scripts/list-user-subscription-keys.ps1` - exports generated APIM subscription keys
-- `scripts/deploy-dashboard-workbook.ps1` - creates/updates an Azure Workbook dashboard
+- `scripts/deploy-grafana-dashboard.ps1` - configures Azure Managed Grafana data source and imports dashboard
 - `scripts/seed-fake-token-metrics.ps1` - sends synthetic token metrics to App Insights for dashboard demos
 - `dashboard/token-cost-queries.kql` - dashboard/reporting queries
+- `grafana/token-cost-dashboard.json` - Azure Managed Grafana dashboard template
 
 ## Prerequisites
 
@@ -106,43 +107,42 @@ Ocp-Apim-Subscription-Key: <user-key>
 
 ## Dashboard and cost calculation
 
-Use `dashboard/token-cost-queries.kql` in Azure Monitor Logs or Workbook:
+The dashboard is **Azure Managed Grafana**, backed by the Azure Monitor data source.
 
-Before using the workbook, in the Application Insights resource open **Usage and estimated costs** and enable **Custom metrics (Preview) -> With dimensions**.
+Cost is computed from the per-request token metrics emitted by the APIM policy, multiplied by per-model prices (USD per 1M tokens) for input, cached input, and output. Prices are defined inline in the Grafana panel queries and in `dashboard/token-cost-queries.kql` — update them if your contracted or regional rates differ, and keep the two in sync.
 
-1. `dashboard/token-cost-queries.kql` is prefilled with Global Standard PAYG prices (USD per 1M tokens) for:
-   - `gpt-5.4`
-   - `gpt-5.4-mini`
-   - `gpt-5.4-nano`
-   Update these values if your contracted or regional rates differ.
-2. Run:
-   - Query 1: daily token trend
-   - Query 2: daily spend trend (USD)
-   - Query 3: per key + model breakdown
-   - Query 4: per model total across users
-   - Query 5: model-router selected model breakdown
-   - Query 6: total tokens by model and reasoning effort
+> **Schema note:** Grafana queries the **Log Analytics workspace**, where Application Insights custom metrics surface as the **`AppMetrics`** table (`Name`, `Sum`, `Properties`, `TimeGenerated`). The standalone reference queries in `dashboard/token-cost-queries.kql` target the **Application Insights** resource directly and use the classic `customMetrics` schema (`name`, `value`, `customDimensions`, `timestamp`). Both compute identical costs; only the table and column names differ.
+
+### Deploy the Grafana dashboard
+
+```powershell
+.\scripts\deploy-grafana-dashboard.ps1 -ResourceGroupName rg-tctokens -GrafanaName graf-tctokens-lpycq6 -LogAnalyticsWorkspaceName log-tctokens-lpycq6
+```
+
+This script will:
+- ensure the Azure Monitor data source exists and uses managed identity
+- create a Grafana folder named **Token Cost Dashboards**
+- import/update `grafana/token-cost-dashboard.json` with working data source and Log Analytics workspace bindings
+
+The dashboard provides a Developer/Key and Model filter plus: daily token trend, daily spend trend (USD), per key/user/model cost table, cost by model, router selected-model distribution, and total tokens by model and reasoning effort.
+
+If the script returns `No Grafana Role Assigned`, assign yourself at least **Grafana Admin** on the Managed Grafana resource and rerun. Role propagation can take a few minutes.
+
+### Reference queries
+
+`dashboard/token-cost-queries.kql` contains standalone KQL (Application Insights `customMetrics` scope) for ad-hoc analysis in Azure Monitor Logs:
+- Query 1: daily token trend
+- Query 2: daily spend trend (USD)
+- Query 3: per key + model breakdown
+- Query 4: per model total across users
+- Query 5: model-router selected model breakdown
+- Query 6: total tokens by model and reasoning effort
 
 These queries compute total dollar spend per user key and per model.
 
-### Deploy workbook dashboard
-
-```powershell
-.\scripts\deploy-dashboard-workbook.ps1 -ResourceGroupName rg-tctokens -AppInsightsName appi-tctokens-lpycq6
-```
-
-This creates/updates a workbook named **Total Cost of Tokens Dashboard** with:
-- Developer/Key filter (all visuals)
-- Daily token trend chart
-- Daily spend trend chart
-- Per-user key/model spend table
-- Per-model spend chart
-- Total tokens by model and reasoning effort pie chart
-- Router selected-model distribution chart
-
 ### Seed synthetic demo data
 
-Use this to populate metrics for `user01-subscription` through `user05-subscription` so the workbook shows realistic activity quickly:
+Use this to populate metrics for `user01-subscription` through `user05-subscription` so the dashboard shows realistic activity quickly:
 
 ```powershell
 .\scripts\seed-fake-token-metrics.ps1 -ResourceGroupName rg-tctokens -AppInsightsName appi-tctokens-lpycq6 -Days 2 -SamplesPerDay 12 -SyntheticSpreadDays 14
