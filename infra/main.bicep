@@ -19,7 +19,7 @@ param publisherName string = 'Token Cost Insights'
 @description('APIM publisher email.')
 param publisherEmail string = 'admin@example.com'
 
-@description('Azure AI Foundry account name.')
+@description('Microsoft Foundry account name.')
 param aiAccountName string = take('ais-${toLower(environmentName)}-${substring(uniqueString(subscription().subscriptionId, environmentName), 0, 6)}', 64)
 
 @description('Custom subdomain for Foundry/OpenAI endpoint.')

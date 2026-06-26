@@ -1,4 +1,4 @@
-# Connect Codex CLI to Azure AI Gateway (APIM)
+# Connect Codex CLI to Microsoft Foundry via AI Gateway (APIM)
 
 This guide uses the captured artifacts in this folder:
 
@@ -8,9 +8,12 @@ This guide uses the captured artifacts in this folder:
 ## 1. Copy artifacts to your Codex home
 
 ```powershell
-Copy-Item C:\code\github\madsd\tctokens\codex\foundry-models.json C:\Users\madsd\.codex\foundry-models.json -Force
-Copy-Item C:\code\github\madsd\tctokens\codex\config.toml C:\Users\madsd\.codex\config.toml -Force
+# Adjust <repo-path> to where you cloned this repo
+Copy-Item <repo-path>\codex\foundry-models.json "$env:USERPROFILE\.codex\foundry-models.json" -Force
 ```
+
+Then **merge** the provider block below into your existing `~/.codex/config.toml`
+(do not wholesale replace — your marketplace, plugin, mcp_servers sections must stay intact):
 
 ## 2. Set APIM subscription key in environment
 
@@ -30,8 +33,8 @@ model_reasoning_effort = "xhigh"
 model_catalog_json = "~/.codex/foundry-models.json"
 
 [model_providers.foundry-gateway]
-name = "Foundry via AI Gateway"
-base_url = "https://apim-tctokens-lpycq6.azure-api.net/openai"
+name = "Microsoft Foundry via AI Gateway"
+base_url = "https://<your-apim-name>.azure-api.net/openai"
 wire_api = "responses"
 env_http_headers = { "Ocp-Apim-Subscription-Key" = "APIM_SUB_KEY" }
 ```
@@ -53,5 +56,5 @@ When using `router`, APIM/Foundry routing should select an underlying model and 
 
 ## Notes
 
-- This captured `config.toml` includes machine-specific runtime/plugin blocks. Keep them if they work for your machine, or keep only the provider/model sections if you want a minimal portable config.
+- This `config.toml` contains only the portable provider/model settings. Your machine-specific runtime sections (notify, mcp_servers, plugins, marketplaces, projects, tui, desktop, windows) are managed by Codex itself and should remain in your local `~/.codex/config.toml`.
 - The gateway endpoint is Responses API based (`/openai/responses`).

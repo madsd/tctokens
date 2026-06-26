@@ -1,6 +1,6 @@
 targetScope = 'resourceGroup'
 
-@description('Existing Azure AI Foundry (AIServices) account name.')
+@description('Existing Microsoft Foundry (AIServices) account name.')
 param accountName string
 
 @description('Foundry project name.')

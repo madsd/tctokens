@@ -12,7 +12,7 @@ param publisherName string
 @description('APIM publisher email.')
 param publisherEmail string
 
-@description('Azure AI Foundry account name.')
+@description('Microsoft Foundry account name.')
 param aiAccountName string
 
 @description('Custom subdomain for Foundry/OpenAI endpoint.')

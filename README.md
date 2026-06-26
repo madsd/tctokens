@@ -2,7 +2,7 @@
 
 This project provisions:
 
-- Azure AI Foundry account + Foundry project (both with system-assigned managed identity)
+- Microsoft Foundry account + Foundry project (both with system-assigned managed identity)
 - Model deployments:
   - `gpt-5.4`
   - `gpt-5.4-mini`
