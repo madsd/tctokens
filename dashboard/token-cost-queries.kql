@@ -1,5 +1,6 @@
 // Query 1: Daily token trend (last 30 days)
 // Update this pricing table with your negotiated prices in USD per 1M tokens.
+let DeveloperKey = 'all'; // Set to a specific subscription id (e.g. user01-subscription) to filter.
 let ModelPricing = datatable(
     Model:string,
     InputPricePer1MUsd:real,
@@ -14,7 +15,9 @@ let ModelPricing = datatable(
 let TokenMetrics = customMetrics
 | where timestamp > ago(30d)
 | where name in ("Prompt Tokens", "Completion Tokens", "Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens")
+| extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
+| where DeveloperKey == 'all' or SubscriptionId == DeveloperKey
 | where isnotempty(Model)
 | summarize
     PromptTokens = sumif(value, name == "Prompt Tokens"),
@@ -29,9 +32,12 @@ TokenMetrics
     UncachedInputTokens = sum(UncachedInputTokens),
     OutputTokens = sum(CompletionTokens)
   by Day
+| extend DayLabel = format_datetime(Day, 'yyyy-MM-dd')
 | order by Day asc
+| project DayLabel, CachedInputTokens, UncachedInputTokens, OutputTokens
 
 // Query 2: Daily spend trend in USD (last 30 days)
+let DeveloperKey = 'all'; // Set to a specific subscription id (e.g. user01-subscription) to filter.
 let ModelPricing = datatable(
     Model:string,
     InputPricePer1MUsd:real,
@@ -47,7 +53,9 @@ let ModelPricing = datatable(
 let TokenMetrics = customMetrics
 | where timestamp > ago(30d)
 | where name in ("Prompt Tokens", "Completion Tokens", "Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens")
+| extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
+| where DeveloperKey == 'all' or SubscriptionId == DeveloperKey
 | where isnotempty(Model)
 | summarize
     PromptTokens = sumif(value, name == "Prompt Tokens"),
@@ -63,9 +71,12 @@ TokenMetrics
     (CachedInputTokens / 1000000.0) * coalesce(CachedInputPricePer1MUsd, 0.0) +
     (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0)
 | summarize TotalCostUsd = round(sum(TotalCostUsd), 2) by Day
+| extend DayLabel = format_datetime(Day, 'yyyy-MM-dd')
 | order by Day asc
+| project DayLabel, TotalCostUsd
 
 // Query 3: Per user key + model token usage and cost (USD)
+let DeveloperKey = 'all'; // Set to a specific subscription id (e.g. user01-subscription) to filter.
 let ModelPricing = datatable(
     Model:string,
     InputPricePer1MUsd:real,
@@ -84,6 +95,7 @@ let TokenMetrics = customMetrics
 | extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend UserId = tostring(customDimensions["User ID"])
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
+| where DeveloperKey == 'all' or SubscriptionId == DeveloperKey
 | where isnotempty(SubscriptionId) and isnotempty(Model)
 | summarize
     PromptTokens = sumif(value, name == "Prompt Tokens"),
@@ -98,15 +110,11 @@ TokenMetrics
 | extend OutputCostUsd = (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0)
 | extend TotalCostUsd = InputCostUsd + CachedInputCostUsd + OutputCostUsd
 | extend TotalCostUsd = round(TotalCostUsd, 2)
-| summarize
-    PromptTokens = sum(PromptTokens),
-    CachedInputTokens = sum(CachedInputTokens),
-    CompletionTokens = sum(CompletionTokens),
-    TotalCostUsd = sum(TotalCostUsd)
-  by SubscriptionId, UserId
+| project SubscriptionId, UserId, Model, PromptTokens, CachedInputTokens, CompletionTokens, TotalCostUsd
 | order by TotalCostUsd desc
 
 // Query 4: Per model totals across all users
+let DeveloperKey = 'all'; // Set to a specific subscription id (e.g. user01-subscription) to filter.
 let ModelPricing = datatable(
     Model:string,
     InputPricePer1MUsd:real,
@@ -122,7 +130,9 @@ let ModelPricing = datatable(
 let TokenMetrics = customMetrics
 | where timestamp > ago(30d)
 | where name in ("Prompt Tokens", "Completion Tokens", "Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens")
+| extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
+| where DeveloperKey == 'all' or SubscriptionId == DeveloperKey
 | where isnotempty(Model)
 | summarize
     PromptTokens = sumif(value, name == "Prompt Tokens"),
@@ -141,23 +151,29 @@ TokenMetrics
 | order by TotalCostUsd desc
 
 // Query 5: Router selection breakdown (selected model when caller used deploymentId=router)
+let DeveloperKey = 'all'; // Set to a specific subscription id (e.g. user01-subscription) to filter.
 customMetrics
 | where timestamp > ago(30d)
 | where name == "Total Tokens"
+| extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend RequestedModel = tostring(customDimensions["RequestedModel"])
 | extend SelectedModel = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
+| where DeveloperKey == 'all' or SubscriptionId == DeveloperKey
 | where tolower(RequestedModel) == "router"
 | where isnotempty(SelectedModel)
 | summarize TotalTokens = sum(value), Requests = count() by SelectedModel
 | order by TotalTokens desc
 
 // Query 6: Total tokens by model and reasoning effort
+let DeveloperKey = 'all'; // Set to a specific subscription id (e.g. user01-subscription) to filter.
 customMetrics
 | where timestamp > ago(30d)
 | where name == "Total Tokens"
+| extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
 | extend ReasoningEffort = tostring(customDimensions["ReasoningEffort"])
 | extend ReasoningEffort = iif(isempty(ReasoningEffort), "unspecified", tolower(ReasoningEffort))
+| where DeveloperKey == 'all' or SubscriptionId == DeveloperKey
 | where isnotempty(Model)
 | summarize TotalTokens = sum(value) by Model, ReasoningEffort
 | order by TotalTokens desc

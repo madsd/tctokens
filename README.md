@@ -118,7 +118,7 @@ Before using the workbook, in the Application Insights resource open **Usage and
 2. Run:
    - Query 1: daily token trend
    - Query 2: daily spend trend (USD)
-   - Query 3: per key total across models
+   - Query 3: per key + model breakdown
    - Query 4: per model total across users
    - Query 5: model-router selected model breakdown
    - Query 6: total tokens by model and reasoning effort
@@ -132,6 +132,7 @@ These queries compute total dollar spend per user key and per model.
 ```
 
 This creates/updates a workbook named **Total Cost of Tokens Dashboard** with:
+- Developer/Key filter (all visuals)
 - Daily token trend chart
 - Daily spend trend chart
 - Per-user key/model spend table
@@ -141,10 +142,10 @@ This creates/updates a workbook named **Total Cost of Tokens Dashboard** with:
 
 ### Seed synthetic demo data
 
-Use this to populate metrics for `user01-subscription` and `user02-subscription` so the workbook shows realistic activity quickly:
+Use this to populate metrics for `user01-subscription` through `user05-subscription` so the workbook shows realistic activity quickly:
 
 ```powershell
-.\scripts\seed-fake-token-metrics.ps1 -ResourceGroupName rg-tctokens -AppInsightsName appi-tctokens-lpycq6 -Days 2
+.\scripts\seed-fake-token-metrics.ps1 -ResourceGroupName rg-tctokens -AppInsightsName appi-tctokens-lpycq6 -Days 2 -SamplesPerDay 12
 ```
 
 Notes:

@@ -29,7 +29,9 @@ let ModelPricing = datatable(Model:string, InputPricePer1MUsd:real, CachedInputP
 let TokenMetrics = customMetrics
 | where timestamp > ago(30d)
 | where name in ("Prompt Tokens", "Completion Tokens", "Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens")
+| extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
+| where '{DeveloperKey}' == 'all' or SubscriptionId == '{DeveloperKey}'
 | where isnotempty(Model)
 | summarize
     PromptTokens = sumif(value, name == "Prompt Tokens"),
@@ -48,7 +50,9 @@ TokenMetrics
     OutputTokens = sum(CompletionTokens),
     TotalCostUsd = round(sum(InputCostUsd + CachedInputCostUsd + OutputCostUsd), 2)
   by Day
+| extend DayLabel = format_datetime(Day, 'yyyy-MM-dd')
 | order by Day asc
+| project DayLabel, CachedInputTokens, UncachedInputTokens, OutputTokens
 '@
 
 $dailyCostQuery = @'
@@ -61,7 +65,9 @@ let ModelPricing = datatable(Model:string, InputPricePer1MUsd:real, CachedInputP
 let TokenMetrics = customMetrics
 | where timestamp > ago(30d)
 | where name in ("Prompt Tokens", "Completion Tokens", "Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens")
+| extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
+| where '{DeveloperKey}' == 'all' or SubscriptionId == '{DeveloperKey}'
 | where isnotempty(Model)
 | summarize
     PromptTokens = sumif(value, name == "Prompt Tokens"),
@@ -76,7 +82,9 @@ TokenMetrics
     (CachedInputTokens / 1000000.0) * coalesce(CachedInputPricePer1MUsd, 0.0) +
     (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0)
 | summarize TotalCostUsd = round(sum(TotalCostUsd), 2) by Day
+| extend DayLabel = format_datetime(Day, 'yyyy-MM-dd')
 | order by Day asc
+| project DayLabel, TotalCostUsd
 '@
 
 $userSpendQuery = @'
@@ -92,6 +100,7 @@ let TokenMetrics = customMetrics
 | extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend UserId = tostring(customDimensions["User ID"])
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
+| where '{DeveloperKey}' == 'all' or SubscriptionId == '{DeveloperKey}'
 | where isnotempty(SubscriptionId) and isnotempty(Model)
 | summarize
     PromptTokens = sumif(value, name == "Prompt Tokens"),
@@ -120,7 +129,9 @@ let ModelPricing = datatable(Model:string, InputPricePer1MUsd:real, CachedInputP
 let TokenMetrics = customMetrics
 | where timestamp > ago(30d)
 | where name in ("Prompt Tokens", "Completion Tokens", "Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens")
+| extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
+| where '{DeveloperKey}' == 'all' or SubscriptionId == '{DeveloperKey}'
 | where isnotempty(Model)
 | summarize
     PromptTokens = sumif(value, name == "Prompt Tokens"),
@@ -143,9 +154,11 @@ $reasoningByModelQuery = @'
 customMetrics
 | where timestamp > ago(30d)
 | where name == "Total Tokens"
+| extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
 | extend ReasoningEffort = tostring(customDimensions["ReasoningEffort"])
 | extend ReasoningEffort = iif(isempty(ReasoningEffort), "unspecified", tolower(ReasoningEffort))
+| where '{DeveloperKey}' == 'all' or SubscriptionId == '{DeveloperKey}'
 | where isnotempty(Model)
 | summarize TotalTokens = sum(value) by Model, ReasoningEffort
 | extend ModelReasoning = strcat(Model, " | ", ReasoningEffort)
@@ -157,8 +170,10 @@ $routerSelectionQuery = @'
 customMetrics
 | where timestamp > ago(30d)
 | where name == "Total Tokens"
+| extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend RequestedModel = tostring(customDimensions["RequestedModel"])
 | extend SelectedModel = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
+| where '{DeveloperKey}' == 'all' or SubscriptionId == '{DeveloperKey}'
 | where tolower(RequestedModel) == "router"
 | where isnotempty(SelectedModel)
 | summarize TotalTokens = sum(value), Requests = count() by SelectedModel
@@ -171,11 +186,30 @@ $workbookModel = @{
     isLocked = $false
     items = @(
         @{
+            type = 9
+            name = 'filters'
+            content = @{
+                version = 'KqlParameterItem/1.0'
+                parameters = @(
+                    @{
+                        version = 'KqlParameterItem/1.0'
+                        id = 'dev-key-filter'
+                        name = 'DeveloperKey'
+                        label = 'Developer / Key'
+                        type = 10
+                        isRequired = $true
+                        jsonData = "[`n  {`"value`":`"all`",`"label`":`"All developers/keys`",`"selected`":true},`n  {`"value`":`"user01-subscription`",`"label`":`"user01 / user01-subscription`"},`n  {`"value`":`"user02-subscription`",`"label`":`"user02 / user02-subscription`"},`n  {`"value`":`"user03-subscription`",`"label`":`"user03 / user03-subscription`"},`n  {`"value`":`"user04-subscription`",`"label`":`"user04 / user04-subscription`"},`n  {`"value`":`"user05-subscription`",`"label`":`"user05 / user05-subscription`"}`n]"
+                    }
+                )
+                style = 'pills'
+            }
+        },
+        @{
             type = 1
             name = 'intro'
             content = @{
                 version = 'TextBlock/1.0'
-                text = "## Total Cost of Tokens`nThis dashboard shows daily token consumption and spend by user key, model, and reasoning effort, including model-router selected model tracking."
+                text = "## Total Cost of Tokens`nUse the **Developer / Key** filter above to scope all visuals. This dashboard shows daily token consumption and spend by user key, model, and reasoning effort, including model-router selected model tracking."
             }
         },
         @{
@@ -190,6 +224,7 @@ $workbookModel = @{
                 title = 'Daily Token Trend'
                 size = 0
                 chartSettings = @{
+                    xAxis = 'DayLabel'
                     yAxis = @('CachedInputTokens', 'UncachedInputTokens', 'OutputTokens')
                     ySettings = @{
                         numberFormatSettings = @{ unit = 17; options = @{ style = 'decimal'; useGrouping = $true } }
@@ -205,10 +240,11 @@ $workbookModel = @{
                 query = $dailyCostQuery
                 queryType = 0
                 resourceType = 'microsoft.insights/components'
-                visualization = 'timechart'
+                visualization = 'columnchart'
                 title = 'Daily Spend Trend (USD)'
                 size = 0
                 chartSettings = @{
+                    xAxis = 'DayLabel'
                     yAxis = @('TotalCostUsd')
                     ySettings = @{
                         numberFormatSettings = @{ unit = 0; options = @{ style = 'decimal'; minimumFractionDigits = 2; maximumFractionDigits = 2 } }
