@@ -145,9 +145,10 @@ This creates/updates a workbook named **Total Cost of Tokens Dashboard** with:
 Use this to populate metrics for `user01-subscription` through `user05-subscription` so the workbook shows realistic activity quickly:
 
 ```powershell
-.\scripts\seed-fake-token-metrics.ps1 -ResourceGroupName rg-tctokens -AppInsightsName appi-tctokens-lpycq6 -Days 2 -SamplesPerDay 12
+.\scripts\seed-fake-token-metrics.ps1 -ResourceGroupName rg-tctokens -AppInsightsName appi-tctokens-lpycq6 -Days 2 -SamplesPerDay 12 -SyntheticSpreadDays 14
 ```
 
 Notes:
 - Synthetic points are marked with `SyntheticData=true` in metric properties.
+- Synthetic spread is encoded via `SyntheticDay=yyyy-MM-dd` to distribute demo charts across the last N days.
 - Application Insights metric ingestion accepts recent timestamps only (about last 48 hours).

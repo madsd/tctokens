@@ -30,6 +30,9 @@ let TokenMetrics = customMetrics
 | where timestamp > ago(30d)
 | where name in ("Prompt Tokens", "Completion Tokens", "Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens")
 | extend SubscriptionId = tostring(customDimensions["Subscription ID"])
+| extend SyntheticData = tolower(tostring(customDimensions["SyntheticData"]))
+| extend SyntheticDay = tostring(customDimensions["SyntheticDay"])
+| where SyntheticData != "true" or isnotempty(SyntheticDay)
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
 | where '{DeveloperKey}' == 'all' or SubscriptionId == '{DeveloperKey}'
 | where isnotempty(Model)
@@ -37,7 +40,7 @@ let TokenMetrics = customMetrics
     PromptTokens = sumif(value, name == "Prompt Tokens"),
     CompletionTokens = sumif(value, name == "Completion Tokens"),
     CachedInputTokens = sumif(value, name in ("Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens"))
-  by Day = startofday(timestamp), Model;
+  by Day = iff(SyntheticData == "true" and isnotempty(SyntheticDay), todatetime(strcat(SyntheticDay, "T00:00:00Z")), startofday(timestamp)), Model;
 TokenMetrics
 | join kind=leftouter ModelPricing on Model
 | extend UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, 0.0)
@@ -66,6 +69,9 @@ let TokenMetrics = customMetrics
 | where timestamp > ago(30d)
 | where name in ("Prompt Tokens", "Completion Tokens", "Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens")
 | extend SubscriptionId = tostring(customDimensions["Subscription ID"])
+| extend SyntheticData = tolower(tostring(customDimensions["SyntheticData"]))
+| extend SyntheticDay = tostring(customDimensions["SyntheticDay"])
+| where SyntheticData != "true" or isnotempty(SyntheticDay)
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
 | where '{DeveloperKey}' == 'all' or SubscriptionId == '{DeveloperKey}'
 | where isnotempty(Model)
@@ -73,7 +79,7 @@ let TokenMetrics = customMetrics
     PromptTokens = sumif(value, name == "Prompt Tokens"),
     CompletionTokens = sumif(value, name == "Completion Tokens"),
     CachedInputTokens = sumif(value, name in ("Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens"))
-  by Day = startofday(timestamp), Model;
+  by Day = iff(SyntheticData == "true" and isnotempty(SyntheticDay), todatetime(strcat(SyntheticDay, "T00:00:00Z")), startofday(timestamp)), Model;
 TokenMetrics
 | join kind=leftouter ModelPricing on Model
 | extend UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, 0.0)

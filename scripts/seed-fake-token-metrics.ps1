@@ -9,7 +9,10 @@ param(
     [int]$Days = 14,
 
     [Parameter(Mandatory = $false)]
-    [int]$SamplesPerDay = 12
+    [int]$SamplesPerDay = 12,
+
+    [Parameter(Mandatory = $false)]
+    [int]$SyntheticSpreadDays = 14
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,6 +23,10 @@ if ($Days -lt 1) {
 
 if ($SamplesPerDay -lt 1) {
     throw "SamplesPerDay must be at least 1."
+}
+
+if ($SyntheticSpreadDays -lt 1) {
+    throw "SyntheticSpreadDays must be at least 1."
 }
 
 # Application Insights Metric ingestion accepts only recent timestamps (roughly last 48 hours).
@@ -123,49 +130,51 @@ function New-MetricEnvelope {
 
 $events = New-Object System.Collections.Generic.List[object]
 $nowUtc = (Get-Date).ToUniversalTime()
-$intervalHours = 24.0 / $SamplesPerDay
+$sampleSlots = [Math]::Max($Days * $SamplesPerDay, 1)
+$totalHours = $Days * 24.0
 
-for ($dayOffset = $Days - 1; $dayOffset -ge 0; $dayOffset--) {
-    $dayStartUtc = $nowUtc.Date.AddDays(-$dayOffset)
+for ($slotIndex = 0; $slotIndex -lt $sampleSlots; $slotIndex++) {
+    $hoursFromStart = (($slotIndex + 0.5) * $totalHours) / $sampleSlots
+    $sampleTimeUtc = $nowUtc.AddHours(-($totalHours - $hoursFromStart))
 
-    for ($sampleIndex = 0; $sampleIndex -lt $SamplesPerDay; $sampleIndex++) {
-        $sampleTimeUtc = $dayStartUtc.AddHours($sampleIndex * $intervalHours).AddMinutes(15)
-        if ($sampleTimeUtc -gt $nowUtc.AddMinutes(-2)) {
-            continue
-        }
+    $spreadOffset = [Math]::Floor(($slotIndex * $SyntheticSpreadDays) / $sampleSlots)
+    if ($spreadOffset -gt ($SyntheticSpreadDays - 1)) {
+        $spreadOffset = $SyntheticSpreadDays - 1
+    }
+    $syntheticDay = $nowUtc.Date.AddDays(-$spreadOffset).ToString('yyyy-MM-dd')
 
-        foreach ($sub in $subscriptionUsers) {
-            foreach ($profile in $modelProfiles) {
-                $jitter = 1.0 + ((Get-Random -Minimum -12 -Maximum 13) / 100.0)
-                $promptTokens = [math]::Round($profile.PromptBase * $jitter, 0)
-                $cachedTokens = [math]::Round($profile.CachedBase * $jitter, 0)
-                $completionTokens = [math]::Round($profile.CompletionBase * $jitter, 0)
-                $totalTokens = $promptTokens + $completionTokens
+    foreach ($sub in $subscriptionUsers) {
+        foreach ($profile in $modelProfiles) {
+            $jitter = 1.0 + ((Get-Random -Minimum -12 -Maximum 13) / 100.0)
+            $promptTokens = [math]::Round($profile.PromptBase * $jitter, 0)
+            $cachedTokens = [math]::Round($profile.CachedBase * $jitter, 0)
+            $completionTokens = [math]::Round($profile.CompletionBase * $jitter, 0)
+            $totalTokens = $promptTokens + $completionTokens
 
-                $requestedModel = $profile.Name
-                $selectedModel = $profile.Name
+            $requestedModel = $profile.Name
+            $selectedModel = $profile.Name
 
-                # Simulate router requests for gpt-5.4 profile so router charts are populated.
-                if ($profile.Name -eq 'gpt-5.4') {
-                    $requestedModel = 'router'
-                    $selectedModel = $routerTargets[(Get-Random -Minimum 0 -Maximum $routerTargets.Count)]
-                }
-
-                $dims = @{
-                    'Subscription ID' = $sub.SubscriptionId
-                    'User ID' = $sub.UserId
-                    'Model' = $selectedModel
-                    'RequestedModel' = $requestedModel
-                    'SelectedModel' = $selectedModel
-                    'ReasoningEffort' = $profile.ReasoningEffort
-                    'SyntheticData' = 'true'
-                }
-
-                $events.Add((New-MetricEnvelope -MetricName 'Prompt Tokens' -MetricValue $promptTokens -TimeUtc $sampleTimeUtc -Properties $dims -IKey $instrumentationKey))
-                $events.Add((New-MetricEnvelope -MetricName 'Prompt Cached Tokens' -MetricValue $cachedTokens -TimeUtc $sampleTimeUtc -Properties $dims -IKey $instrumentationKey))
-                $events.Add((New-MetricEnvelope -MetricName 'Completion Tokens' -MetricValue $completionTokens -TimeUtc $sampleTimeUtc -Properties $dims -IKey $instrumentationKey))
-                $events.Add((New-MetricEnvelope -MetricName 'Total Tokens' -MetricValue $totalTokens -TimeUtc $sampleTimeUtc -Properties $dims -IKey $instrumentationKey))
+            # Simulate router requests for gpt-5.4 profile so router charts are populated.
+            if ($profile.Name -eq 'gpt-5.4') {
+                $requestedModel = 'router'
+                $selectedModel = $routerTargets[(Get-Random -Minimum 0 -Maximum $routerTargets.Count)]
             }
+
+            $dims = @{
+                'Subscription ID' = $sub.SubscriptionId
+                'User ID' = $sub.UserId
+                'Model' = $selectedModel
+                'RequestedModel' = $requestedModel
+                'SelectedModel' = $selectedModel
+                'ReasoningEffort' = $profile.ReasoningEffort
+                'SyntheticData' = 'true'
+                'SyntheticDay' = $syntheticDay
+            }
+
+            $events.Add((New-MetricEnvelope -MetricName 'Prompt Tokens' -MetricValue $promptTokens -TimeUtc $sampleTimeUtc -Properties $dims -IKey $instrumentationKey))
+            $events.Add((New-MetricEnvelope -MetricName 'Prompt Cached Tokens' -MetricValue $cachedTokens -TimeUtc $sampleTimeUtc -Properties $dims -IKey $instrumentationKey))
+            $events.Add((New-MetricEnvelope -MetricName 'Completion Tokens' -MetricValue $completionTokens -TimeUtc $sampleTimeUtc -Properties $dims -IKey $instrumentationKey))
+            $events.Add((New-MetricEnvelope -MetricName 'Total Tokens' -MetricValue $totalTokens -TimeUtc $sampleTimeUtc -Properties $dims -IKey $instrumentationKey))
         }
     }
 }
@@ -187,3 +196,4 @@ for ($start = 0; $start -lt $events.Count; $start += $chunkSize) {
 Write-Host "Sent $($events.Count) synthetic metric envelopes to $AppInsightsName (accepted: $acceptedTotal)."
 Write-Host "Dimensions used Subscription ID values: user01-subscription..user05-subscription."
 Write-Host "Synthetic data marker: customDimensions['SyntheticData'] = true"
+Write-Host "Synthetic spread marker: customDimensions['SyntheticDay'] across $SyntheticSpreadDays day(s)."
