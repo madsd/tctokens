@@ -1,4 +1,4 @@
-# Azure Foundry + APIM AI Gateway Token Cost Insights
+# Microsoft Foundry + APIM AI Gateway Token Cost Insights
 
 This project provisions:
 
