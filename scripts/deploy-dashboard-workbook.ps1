@@ -19,7 +19,7 @@ if (-not $appInsights.id) {
     throw "Application Insights '$AppInsightsName' was not found in '$ResourceGroupName'."
 }
 
-$monthlySpendQuery = @'
+$dailySpendQuery = @'
 let ModelPricing = datatable(Model:string, InputPricePer1MUsd:real, CachedInputPricePer1MUsd:real, OutputPricePer1MUsd:real)
 [
     "gpt-5.4", 2.50, 0.25, 15.00,
@@ -27,7 +27,7 @@ let ModelPricing = datatable(Model:string, InputPricePer1MUsd:real, CachedInputP
     "gpt-5.4-nano", 0.20, 0.025, 1.25
 ];
 let TokenMetrics = customMetrics
-| where timestamp > ago(180d)
+| where timestamp > ago(30d)
 | where name in ("Prompt Tokens", "Completion Tokens", "Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens")
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
 | where isnotempty(Model)
@@ -35,7 +35,7 @@ let TokenMetrics = customMetrics
     PromptTokens = sumif(value, name == "Prompt Tokens"),
     CompletionTokens = sumif(value, name == "Completion Tokens"),
     CachedInputTokens = sumif(value, name in ("Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens"))
-  by Month = startofmonth(timestamp), Model;
+  by Day = startofday(timestamp), Model;
 TokenMetrics
 | join kind=leftouter ModelPricing on Model
 | extend UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, 0.0)
@@ -50,8 +50,8 @@ TokenMetrics
     UncachedInputTokens = sum(UncachedInputTokens),
     OutputTokens = sum(CompletionTokens),
     TotalCostUsd = round(sum(InputCostUsd + CachedInputCostUsd + OutputCostUsd), 2)
-  by Month
-| order by Month asc
+  by Day
+| order by Day asc
 '@
 
 $userSpendQuery = @'
@@ -67,14 +67,12 @@ let TokenMetrics = customMetrics
 | extend SubscriptionId = tostring(customDimensions["Subscription ID"])
 | extend UserId = tostring(customDimensions["User ID"])
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
-| extend ReasoningEffort = tostring(customDimensions["ReasoningEffort"])
-| extend ReasoningEffort = iif(isempty(ReasoningEffort), "unspecified", tolower(ReasoningEffort))
 | where isnotempty(SubscriptionId) and isnotempty(Model)
 | summarize
     PromptTokens = sumif(value, name == "Prompt Tokens"),
     CompletionTokens = sumif(value, name == "Completion Tokens"),
     CachedInputTokens = sumif(value, name in ("Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens"))
-  by SubscriptionId, UserId, Model, ReasoningEffort;
+  by SubscriptionId, UserId, Model;
 TokenMetrics
 | join kind=leftouter ModelPricing on Model
 | extend UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, 0.0)
@@ -83,7 +81,7 @@ TokenMetrics
     (CachedInputTokens / 1000000.0) * coalesce(CachedInputPricePer1MUsd, 0.0) +
     (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0)
 | extend TotalCostUsd = round(TotalCostUsd, 2)
-| project SubscriptionId, UserId, Model, ReasoningEffort, PromptTokens, CachedInputTokens, CompletionTokens, TotalCostUsd
+| project SubscriptionId, UserId, Model, PromptTokens, CachedInputTokens, CompletionTokens, TotalCostUsd
 | order by TotalCostUsd desc
 '@
 
@@ -157,15 +155,27 @@ $workbookModel = @{
         },
         @{
             type = 3
-            name = 'monthly-spend'
+            name = 'daily-spend'
             content = @{
                 version = 'KqlItem/1.0'
-                query = $monthlySpendQuery
+                query = $dailySpendQuery
                 queryType = 0
                 resourceType = 'microsoft.insights/components'
                 visualization = 'columnchart'
-                title = 'Monthly Token and Spend Trend'
+                title = 'Daily Token and Spend Trend'
                 size = 0
+                chartSettings = @{
+                    seriesLabelSettings = @(
+                        @{ seriesName = 'TotalCostUsd'; yAxisSetting = 1 }
+                    )
+                    ySettings = @{
+                        numberFormatSettings = @{ unit = 17; options = @{ style = 'decimal'; useGrouping = $true } }
+                    }
+                    y2Settings = @{
+                        numberFormatSettings = @{ unit = 0; options = @{ style = 'decimal'; minimumFractionDigits = 2; maximumFractionDigits = 2 } }
+                        axisLabelOverride = 'Cost (USD)'
+                    }
+                }
             }
         },
         @{

@@ -1,4 +1,4 @@
-// Query 1: Per user key + model token usage and cost (USD)
+// Query 1: Daily token and spend trend (last 30 days)
 // Update this pricing table with your negotiated prices in USD per 1M tokens.
 let ModelPricing = datatable(
     Model:string,
@@ -11,44 +11,31 @@ let ModelPricing = datatable(
     "gpt-5.4-mini", 0.75, 0.075, 4.50,
     "gpt-5.4-nano", 0.20, 0.025, 1.25
 ];
-
 let TokenMetrics = customMetrics
 | where timestamp > ago(30d)
 | where name in ("Prompt Tokens", "Completion Tokens", "Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens")
-| extend SubscriptionId = tostring(customDimensions["Subscription ID"])
-| extend UserId = tostring(customDimensions["User ID"])
 | extend Model = coalesce(tostring(customDimensions["SelectedModel"]), tostring(customDimensions["Model"]))
-| extend ReasoningEffort = tostring(customDimensions["ReasoningEffort"])
-| extend ReasoningEffort = iif(isempty(ReasoningEffort), "unspecified", tolower(ReasoningEffort))
-| where isnotempty(SubscriptionId) and isnotempty(Model)
+| where isnotempty(Model)
 | summarize
     PromptTokens = sumif(value, name == "Prompt Tokens"),
     CompletionTokens = sumif(value, name == "Completion Tokens"),
     CachedInputTokens = sumif(value, name in ("Prompt Cached Tokens", "Cached Prompt Tokens", "Cached Tokens"))
-  by SubscriptionId, UserId, Model, ReasoningEffort;
-
+  by Day = startofday(timestamp), Model;
 TokenMetrics
 | join kind=leftouter ModelPricing on Model
-| extend InputCostUsd = (PromptTokens / 1000000.0) * coalesce(InputPricePer1MUsd, 0.0)
+| extend UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, 0.0)
+| extend InputCostUsd = (UncachedInputTokens / 1000000.0) * coalesce(InputPricePer1MUsd, 0.0)
 | extend CachedInputCostUsd = (CachedInputTokens / 1000000.0) * coalesce(CachedInputPricePer1MUsd, 0.0)
 | extend OutputCostUsd = (CompletionTokens / 1000000.0) * coalesce(OutputPricePer1MUsd, 0.0)
-| extend TotalCostUsd = InputCostUsd + CachedInputCostUsd + OutputCostUsd
-| extend TotalCostUsd = round(TotalCostUsd, 2)
-| project
-    SubscriptionId,
-    UserId,
-    Model,
-    ReasoningEffort,
-    PromptTokens,
-    CachedInputTokens,
-    CompletionTokens,
-    InputCostUsd,
-    CachedInputCostUsd,
-    OutputCostUsd,
-    TotalCostUsd
-| order by TotalCostUsd desc
+| summarize
+    CachedInputTokens = sum(CachedInputTokens),
+    UncachedInputTokens = sum(UncachedInputTokens),
+    OutputTokens = sum(CompletionTokens),
+    TotalCostUsd = round(sum(InputCostUsd + CachedInputCostUsd + OutputCostUsd), 2)
+  by Day
+| order by Day asc
 
-// Query 2: Per user key totals across all models
+// Query 2: Per user key + model token usage and cost (USD)
 let ModelPricing = datatable(
     Model:string,
     InputPricePer1MUsd:real,
