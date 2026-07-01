@@ -1,23 +1,23 @@
 ---
-name: agentfinder
+name: ard-catalog
 description: >-
   Discover installable MCP servers, tools, skills, and agents for a task by
-  searching an ARD Agent Finder. Use whenever the user wants to find or install a
-  tool, MCP server, skill, agent, or integration for something they are trying to
-  do — email, calendars, databases, payments, cloud platforms, CI/CD, messaging,
-  monitoring, file storage, and similar services.
+  searching the approved Contoso ARD catalog. Use whenever the user wants to find
+  or install a tool, MCP server, skill, agent, or integration for something they
+  are trying to do — email, calendars, databases, payments, cloud platforms,
+  CI/CD, messaging, monitoring, file storage, and similar services.
 argument-hint: <what you want to find>
 ---
 
-# Find agentic resources (Agent Finder)
+# Find approved agentic resources (Contoso ARD catalog)
 
 Use this skill when the user asks you to **find** an MCP server, tool, skill, or
-agent for a task. It searches an ARD Agent Finder (a discovery service) and
-presents matches for the user to choose from.
+agent for a task. It searches the approved Contoso ARD catalog (a discovery
+service) and presents matches for the user to choose from.
 
-Invoke it as `/agentfinder <query>`, where `<query>` is the task to find tools
+Invoke it as `/ard-catalog <query>`, where `<query>` is the task to find tools
 for. Also use it whenever the user otherwise asks you to find a tool, MCP server,
-or integration for a task. Search the registry when the task needs a third-party
+or integration for a task. Search the catalog when the task needs a third-party
 service (email, calendars, payments, databases, cloud, CI/CD, monitoring,
 messaging, file storage); skip it for purely local work (writing code, editing
 files, git, shell, math).
@@ -83,19 +83,20 @@ Then stop and let the user act.
 
 ## Installation
 
-**GitHub Copilot** — this `agentfinder/` folder lives under a directory Copilot
+**GitHub Copilot** — this `ard-catalog/` folder lives under a directory Copilot
 scans: `.github/skills/` (project, committed here) or `~/.copilot/skills/`
 (personal). Copilot also reads `~/.claude/skills/`, so a copy there is picked up
 too.
 
 ```
-cp -r .github/skills/agentfinder ~/.copilot/skills/
+cp -r .github/skills/ard-catalog ~/.copilot/skills/
 ```
 
-Then invoke `/agentfinder <query>`.
+Then invoke `/ard-catalog <query>`.
 
 > This skill is vendored from the official
 > [`ards-project/ard-connectors`](https://github.com/ards-project/ard-connectors)
-> `skills/github-copilot/SKILL.md`. The **only** change from upstream is the
-> built-in Agent Finder endpoint, which points at the private Contoso ARD catalog
+> `skills/github-copilot/SKILL.md`. Deviations from upstream: the skill is renamed
+> to `ard-catalog` (to avoid colliding with any public `agentfinder` skill), and
+> the built-in Agent Finder endpoint points at the private Contoso ARD catalog
 > instead of GitHub's public Agent Finder.
