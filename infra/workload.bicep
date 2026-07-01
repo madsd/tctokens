@@ -61,6 +61,21 @@ param routerCapacity int
 @description('Initial APIM users and dedicated subscription keys.')
 param initialUsers array
 
+@description('Function App name.')
+param functionAppName string
+
+@description('Function App Flex Consumption hosting plan name.')
+param functionHostingPlanName string
+
+@description('Storage account name backing the Function App.')
+param functionStorageAccountName string
+
+@description('Functions language runtime.')
+param functionsRuntime string
+
+@description('Functions runtime version.')
+param functionsRuntimeVersion string
+
 module aiAccount 'br/public:avm/res/cognitive-services/account:0.11.0' = {
   name: 'ai-account'
   params: {
@@ -302,6 +317,20 @@ resource apimDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-0
   }
 }
 
+module functions './functions.bicep' = {
+  name: 'functions'
+  params: {
+    location: location
+    tags: tags
+    functionAppName: functionAppName
+    hostingPlanName: functionHostingPlanName
+    storageAccountName: functionStorageAccountName
+    appInsightsConnectionString: appInsights.properties.ConnectionString
+    functionsRuntime: functionsRuntime
+    functionsRuntimeVersion: functionsRuntimeVersion
+  }
+}
+
 output foundryAccountName string = aiAccountName
 output foundryProjectName string = aiProjectName
 output foundryEndpoint string = aiAccountResource.properties.endpoint
@@ -313,3 +342,5 @@ output grafanaName string = managedGrafana.name
 output grafanaEndpoint string = managedGrafana.properties.endpoint
 output userSubscriptionNames array = apimGateway.outputs.userSubscriptionNames
 output foundryProjectId string = aiProject.outputs.projectId
+output functionAppName string = functions.outputs.functionAppName
+output functionAppHostname string = functions.outputs.functionAppHostname

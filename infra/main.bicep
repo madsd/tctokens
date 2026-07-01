@@ -65,6 +65,21 @@ param routerModelVersion string
 param routerModelSku string = 'GlobalStandard'
 param routerCapacity int = 20
 
+@description('Function App name.')
+param functionAppName string = take('func-${toLower(environmentName)}-${substring(uniqueString(subscription().subscriptionId, environmentName), 0, 6)}', 60)
+
+@description('Function App Flex Consumption hosting plan name.')
+param functionHostingPlanName string = take('plan-${toLower(environmentName)}-${substring(uniqueString(subscription().subscriptionId, environmentName), 0, 6)}', 40)
+
+@description('Storage account name backing the Function App (3-24 lowercase alphanumeric).')
+param functionStorageAccountName string = take('stfn${toLower(replace(environmentName, '-', ''))}${substring(uniqueString(subscription().subscriptionId, environmentName), 0, 6)}', 24)
+
+@description('Functions language runtime.')
+param functionsRuntime string = 'dotnet-isolated'
+
+@description('Functions runtime version.')
+param functionsRuntimeVersion string = '8.0'
+
 @description('Initial APIM users and dedicated subscription keys.')
 param initialUsers array = [
   {
@@ -141,6 +156,11 @@ module workload './workload.bicep' = {
     routerModelSku: routerModelSku
     routerCapacity: routerCapacity
     initialUsers: initialUsers
+    functionAppName: functionAppName
+    functionHostingPlanName: functionHostingPlanName
+    functionStorageAccountName: functionStorageAccountName
+    functionsRuntime: functionsRuntime
+    functionsRuntimeVersion: functionsRuntimeVersion
   }
 }
 
@@ -156,3 +176,5 @@ output grafanaName string = workload.outputs.grafanaName
 output grafanaEndpoint string = workload.outputs.grafanaEndpoint
 output userSubscriptionNames array = workload.outputs.userSubscriptionNames
 output foundryProjectId string = workload.outputs.foundryProjectId
+output functionAppName string = workload.outputs.functionAppName
+output functionAppHostname string = workload.outputs.functionAppHostname
