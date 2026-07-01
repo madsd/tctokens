@@ -31,7 +31,7 @@ https://ard-catalog.salmonisland-bb7131ca.swedencentral.azurecontainerapps.io/ap
 ```
 
 Query it directly. **Never ask the user for a URL** — the endpoint is built in,
-so `/agentfinder <task>` works with zero configuration. No authentication is
+so `/ard-catalog <task>` works with zero configuration. No authentication is
 required.
 
 Use a different service **only if the user explicitly names one** (e.g. GitHub's
